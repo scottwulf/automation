@@ -4734,9 +4734,11 @@ function onadmin_addupdaterepo
     fi
     mkdir -p $UPR
 
-    if [[ $UPDATEREPOS ]]; then
+    local repos=$UPDATEREPOS
+
+    if [[ $repos ]]; then
         local repo
-        for repo in ${UPDATEREPOS//+/ } ; do
+        for repo in ${repos//+/ } ; do
             safely wget --progress=dot:mega \
                 -r --directory-prefix $UPR \
                 -e robots=off \
