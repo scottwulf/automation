@@ -4724,6 +4724,7 @@ function onadmin_addupdaterepo
 {
     pre_hook $FUNCNAME
 
+    local extra_repos=${1}
     local UPR=
     if iscloudver 7plus; then
         UPR=$tftpboot_repos12sp2_dir/PTF
@@ -4735,6 +4736,26 @@ function onadmin_addupdaterepo
     mkdir -p $UPR
 
     local repos=$UPDATEREPOS
+    # Extra repos can be added on demand to the ptf repo
+    # From the variable $UPDATEREPOS_EXTRA the first 'n' repos are added, where n is the parameter to this function
+    # So addupdaterepo can be called repeatedly. Contents of the extra repos are only added but never removed.
+    local extra_index
+    if [[ $extra_repos ]] ; then
+        case $extra_repos in
+            all|0)
+                extra_index='' ;;
+            [1-9]*([0-9]))
+                extra_index=$extra_repos ;;
+            *)
+                complain 13 "Invalid parameter for addupdaterepo. Valid are integers > 0 or the string 'all'. The value was: $extra_repos" ;;
+        esac
+        repos+="+$(echo $UPDATEREPOS_EXTRA | cut -d+ -f1-$extra_index)"
+    fi
+
+    # cleanup repos
+    repos=$(shopt -s extglob ; echo "${repos//+(+)/+}") # remove duplicate +s
+    repos=${repos%+} # remove trailing +
+    repos=${repos#=} # remove leading +
 
     if [[ $repos ]]; then
         local repo
