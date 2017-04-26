@@ -1434,10 +1434,10 @@ for cmd in `echo $steplist` ; do
     echo $cmd >> mkcloud.steps.log
     # support calls to functions with parameters
     # this is currently used for the cct function
-    cmd_parameters="${cmd#*+}"
+    cmd_and_parameters=$cmd
     cmd=${cmd%%+*}
     TIMEFORMAT="timing for mkcloud step '$cmd' real=%R user=%U system=%S"
-    time $cmd "${cmd_parameters//+/ }"
+    time "${cmd_and_parameters//+/ }"
     ret=$?
     if [ $ret != 0 ] ; then
         set +x
