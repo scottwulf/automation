@@ -225,3 +225,4 @@ for arch in x86_64 aarch64 s390x ; do
 done
 
 ~/bin/syncgitrepos
+~/bin/hardlinkrepos

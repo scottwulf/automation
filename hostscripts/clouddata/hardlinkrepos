@@ -1,0 +1,32 @@
+#!/bin/sh
+r=/srv/nfs/repos
+img=/srv/nfs/images
+dest=/srv/nfs/mkclouddata
+
+function cloudver2slever
+{
+    case $1 in
+        6) echo SP1 ;;
+        7) echo SP2 ;;
+        8) echo SP3 ;;
+        *) exit 41
+    esac
+}
+
+for arch in x86_64 ; do
+    for ver in 6 7 ; do
+        d=$dest/develcloud$ver/$arch
+        mkdir -p $d/images/ $d/repos/
+        rsynclink $r/$arch/SUSE-OpenStack-Cloud-$ver-devel/ $d/repos/SUSE-OpenStack-Cloud-$ver-devel/
+        cp -afl $img/$arch/SLES12-$(cloudver2slever $ver).qcow2 \
+            $img/$arch/SLES12-SP1-JeOS-SE-for-OpenStack-Cloud.$arch-GM.qcow2 \
+            $img/SLES11-SP3-$arch-cfntools.qcow2 \
+            $d/images/
+        for s in manila magnum ; do
+            cp -afl $img/$arch/other/$(readlink $img/$arch/other/$s-service-image.qcow2) \
+                $d/images/$s-service-image.qcow2
+        done
+    done
+done
+
+true

@@ -1,0 +1,8 @@
+#!/bin/bash
+source=$1
+dest=$2
+if [[ $source =~ /^\// ]] ; then
+    echo "Error: You must use an absolute path as source"
+    exit 42
+fi
+exec rsync -aSH --delay-updates --delete-delay --link-dest="$source" "$source" "$dest"
