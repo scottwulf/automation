@@ -1,0 +1,30 @@
+- name: Perform a distribution upgrade
+  zypper:
+    name: "*"
+    state: dist-upgrade
+    disable_recommends: no
+  environment:
+    ZYPP_LOCK_TIMEOUT: 120
+  register: register_distribution_upgrade
+
+# admin is the jumpbox so reboot nodes first
+- name: Reboot to upgraded distribution (nodes)
+  import_role:
+    name: node/reboot
+  when:
+    register_distribution_upgrade.changed and
+    inventory_hostname in groups.stack_nodes
+
+# reboot admin
+- name: Reboot to upgraded distribution (admin)
+  import_role:
+    name: node/reboot
+  when:
+    register_distribution_upgrade.changed and
+    inventory_hostname in groups.stack_admin
+
+- name: Wait for reboot
+  import_role:
+    name: node/reboot_wait
+  when:
+    register_distribution_upgrade.changed

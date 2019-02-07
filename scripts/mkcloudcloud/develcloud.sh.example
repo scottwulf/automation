@@ -1,0 +1,55 @@
+#!/bin/sh
+
+# MKCLOUD VARIABLES
+
+#export debug_mkcloud=1
+#export debug_qa_crowbarsetup=1
+
+export cloudsource=develcloud9
+export networkingplugin=openvswitch
+#export TESTHEAD=1
+export hacloud=0
+export want_sbd=0
+export nodenumber=2
+export want_node_roles=controller=1,compute=1
+export want_node_aliases=controller=1,compute=1
+#export clusterconfig="services+data+network=3"
+# these are the more important bits to get mkcloud going
+export cephvolumenumber=0
+export net_admin=192.168.120
+export adminip=$net_admin.10
+export mkclouddriver=physical
+export want_ironic=0
+export want_ceilometer_proposal=0
+export want_heat_proposal=0
+export want_manila_proposal=0
+export want_trove_proposal=0
+export want_barbican_proposal=0
+export want_magnum_proposal=0
+export want_sahara_proposal=0
+export want_murano_proposal=0
+export want_aodh_proposal=0
+export want_tempest_proposal=1
+
+
+# HEAT TEMPLATE VARIABLES
+
+# values to customize the heat template
+export heat_node_number=$nodenumber
+
+export heat_image_user=root
+if [ $cloudsource == 'develcloud7' ]; then
+  export heat_image=0c0c8367-cf4c-4df1-9414-d8b84e65e870
+elif [ $cloudsource == 'develcloud8' ]; then
+  export heat_image=14d45dd6-7c2e-4d54-9c90-6931c455373e
+elif [ $cloudsource == 'develcloud9' ]; then
+  export heat_image_user=sles
+  export heat_image=d51d22f4-1b00-4782-99c7-55323306fcf1
+fi
+
+export heat_admin_flavor=c4.medium
+if [ $hacloud == 0 ]; then
+  export heat_node_flavor=m1.large
+else
+  export heat_node_flavor=m1.large
+fi

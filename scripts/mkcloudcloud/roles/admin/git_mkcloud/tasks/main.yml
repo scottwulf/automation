@@ -1,0 +1,26 @@
+- name: Install packages
+  zypper:
+    name: [
+      'ca-certificates-mozilla',
+      'git-core',
+      'iptables',
+      'patch',
+      'screen'
+    ]
+  environment:
+    ZYPP_LOCK_TIMEOUT: 120
+
+- name: Clone repository
+  git:
+    repo: 'https://github.com/SUSE-Cloud/automation'
+    dest: ~/automation
+    force: yes
+
+- name: Apply patch
+  patch:
+    src: "{{ item }}"
+    basedir: ~/automation
+    strip: 1
+  with_items:
+    - iso_chksum.patch
+    - post_allocate.patch

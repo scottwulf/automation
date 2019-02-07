@@ -1,0 +1,34 @@
+- name: Filter cached nodes list
+  set_fact:
+    stack_node_facts: "{{ stack_node_facts | selectattr('id', 'in', stack_node_ids) | list }}"
+  when: stack_node_facts is defined
+
+- name: Request node information if cache is invalid
+  block:
+  # makes N calls to a function stack that performs poorly so until the issue
+  # is resolved, comment this and use the following task
+  #- name: Retrieve node information
+  #  os_server_facts:
+  #    verify: no
+  #    server: "{{ item }}"
+  #  with_items: "{{ stack_node_ids }}"
+
+  # 'server' filter is not passed all the way down into the requesting data
+  # function [to reduce the workload] so call the function once with *, filter
+  # afterwards, and cache the results for subsequent runs
+  - name: Retrieve node information
+    os_server_facts:
+      verify: no
+      server: "*"
+
+  - debug: var=openstack_servers
+
+  - name: Filter nodes
+    set_fact:
+      stack_node_facts: "{{ openstack_servers | selectattr('id', 'in', stack_node_ids) | list }}"
+      cacheable: yes
+  when:
+    stack_node_facts is not defined or
+    stack_node_facts|length != stack_node_ids|length
+
+- debug: var=stack_node_facts

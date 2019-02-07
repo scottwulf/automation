@@ -1,0 +1,29 @@
+- name: Get knife return code
+  shell: knife node list
+  ignore_errors: yes
+  register: _register_knife_rc
+- debug: var=_register_knife_rc
+
+- name: Initialize crowbar_registered_nodes
+  set_fact:
+    crowbar_registered_nodes: {}
+
+- block:
+  - name: Get node list
+    shell: knife node list | tr -d ' ' || echo
+    register: _register_knife_node_list
+  - debug: var=_register_knife_node_list
+
+  - name: Get nodes details
+    command: knife node show -l -F json {{ item }}
+    register: _register_knife_show
+    with_items: "{{ _register_knife_node_list.stdout_lines }}"
+  - debug: var=_register_knife_show
+
+  - name: Convert stdout to json
+    set_fact:
+      crowbar_registered_nodes: "{{ crowbar_registered_nodes|combine({ item.item: item.stdout | from_json }) }}"
+    with_items: "{{ _register_knife_show.results }}"
+  when: _register_knife_rc is success
+
+- debug: var=crowbar_registered_nodes

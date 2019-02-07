@@ -1,0 +1,20 @@
+- name: Get OS version
+  shell: |
+    . /etc/os-release
+    echo $VERSION
+  register: _register_tmp
+
+# zypper --gpg-auto-import-keys -n ar -f "http://download.nue.suse.com/update/build.suse.de/SUSE/Products/SLE-SERVER/${DIST_VERSION}/x86_64/product/" Base
+- name: Add repository
+  zypper_repository:
+    name: Base
+    repo: "http://download.nue.suse.com/update/build.suse.de/SUSE/Products/SLE-SERVER/{{ _register_tmp.stdout }}/x86_64/product/"
+    auto_import_keys: yes
+    autorefresh: yes
+    state: present
+
+- name: Refresh all repositories
+  zypper_repository:
+    repo: "*"
+    runrefresh: yes
+    auto_import_keys: yes

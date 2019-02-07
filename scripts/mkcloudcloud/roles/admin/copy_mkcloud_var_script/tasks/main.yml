@@ -1,0 +1,5 @@
+- name: Copy script
+  copy:
+    src: "{{ mkcloud_vars_filename }}"
+    dest: ~/my_mkcloud_vars
+    mode: 0700

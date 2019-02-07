@@ -1,0 +1,6 @@
+# using shell as the reboot module fails "to get system boot time"
+# on SLES
+- name: Reboot
+  shell: sleep 2 && shutdown -r now
+  async: 1
+  poll: 0

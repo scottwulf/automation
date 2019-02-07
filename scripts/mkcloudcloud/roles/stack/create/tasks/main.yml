@@ -1,0 +1,15 @@
+#  command: openstack --insecure stack create --wait -t {{ heat_template_filename }} --parameter key_name={{ ssh_keypair_name }} --parameter namespace={{ stack_name }} {{ stack_name }}
+- name: Create stack
+  os_stack:
+    name: "{{ stack_name }}"
+    state: present
+    template: "{{ heat_template_filename }}"
+    verify: no
+    wait: yes
+    parameters:
+      key_name: "{{ ssh_keypair_name }}"
+      namespace: "{{ stack_name }}"
+      node_number: "{{ lookup('env','heat_node_number') }}"
+      image: "{{ lookup('env','heat_image') }}"
+      admin_flavor: "{{ lookup('env','heat_admin_flavor') }}"
+      node_flavor: "{{ lookup('env','heat_node_flavor') }}"

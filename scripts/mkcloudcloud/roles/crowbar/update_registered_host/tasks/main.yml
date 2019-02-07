@@ -1,0 +1,10 @@
+- block:
+  - name: Store crowbar_facts
+    set_fact:
+      crowbar_facts: "{{ registered_nodes[crowbar_node_name] }}"
+
+  - name: Update host details
+    set_fact:
+      ansible_host: "{{ crowbar_facts.default.crowbar.network.admin.address }}"
+      ansible_user: root
+  when: crowbar_node_name in registered_nodes

@@ -1,0 +1,4 @@
+- name: Remove repository
+  zypper_repository:
+    name: Base
+    state: absent

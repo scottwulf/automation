@@ -1,0 +1,18 @@
+- name: Get stack facts
+  command: "openstack --insecure stack show {{ stack_name }} -f json"
+  register: stack_facts
+
+- name: Convert stdout to json
+  set_fact:
+    stack_facts: "{{ stack_facts.stdout | from_json }}"
+- debug: var=stack_facts
+
+- name: Get floating IP
+  set_fact:
+    stack_floating_ip: "{{ stack_facts.outputs | selectattr('output_key', 'equalto', 'floating_ip') | map(attribute='output_value') | list | first }}"
+- debug: var=stack_floating_ip
+
+- name: Get node IDs
+  set_fact:
+    stack_node_ids: "{{ stack_facts.outputs | selectattr('output_key', 'equalto', 'nodes') | map(attribute='output_value') | list | first }}"
+- debug: var=stack_node_ids

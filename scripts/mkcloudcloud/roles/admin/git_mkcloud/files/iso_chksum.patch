@@ -1,0 +1,38 @@
+diff --git a/scripts/qa_crowbarsetup.sh b/scripts/qa_crowbarsetup.sh
+index 9df37ff2..d8b84f09 100644
+--- a/scripts/qa_crowbarsetup.sh
++++ b/scripts/qa_crowbarsetup.sh
+@@ -558,12 +558,31 @@ function wget_iso_and_unpack_to
+     mkdir -p /mnt/cloud "$targetdir"
+     (
+         cd "$targetdir"
+-        wget --progress=dot:mega -r -np -nc -e robots=off -A "$distiso" http://$isourl \
++
++        # chksum
++        rm -f $isourl/$distiso.sha256
++        wget --progress=dot:mega -r -nc http://$isourl/$distiso.sha256 \
++        || complain 71 "chksum not found"
++        local cloudsum=$(ls $isourl/$distiso.sha256 | tail -1)
++        if [ -z "$cloudsum" ]; then
++            complain 75 "failed to download $distiso.sha256 from http://$isourl"
++        fi
++        cloudsum=`head -4 $isourl/$distiso.sha256 | tail -1 | awk '{ print $1 }'`
++
++        # iso
++        if [ -f $isourl/$distiso ]; then
++          currsum=`sha256sum $isourl/$distiso | awk '{ print $1 }'`
++          if [ "$cloudsum" != "$currsum" ]; then
++            rm -f $isourl/$distiso
++          fi
++        fi
++        wget --progress=dot:mega -r -nc http://$isourl/$distiso \
+         || complain 71 "iso not found"
+-        local cloudiso=$(ls $isourl/*.iso | tail -1)
++        local cloudiso=$(ls $isourl/$distiso | tail -1)
+         if [ -z "$cloudiso" ]; then
+             complain 75 "failed to download $distiso from http://$isourl"
+         fi
++
+         safely mount -o loop,ro -t iso9660 $cloudiso /mnt/cloud
+         safely rsync -av --delete-after /mnt/cloud/ .
+         safely umount /mnt/cloud

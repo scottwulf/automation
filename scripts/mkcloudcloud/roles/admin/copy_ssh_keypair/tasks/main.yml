@@ -1,0 +1,5 @@
+- name: Copy private key to id_rsa
+  copy:
+    src: "{{ ssh_keypair_filename }}"
+    dest: ~/.ssh/id_rsa
+    mode: 0600

@@ -1,0 +1,13 @@
+- name: Check for missing parameters
+  hosts: localhost
+  tasks:
+    # always required variables
+    - name: Check for parameter stack_name
+      fail:
+        msg: "stack_name is required"
+      when: stack_name is not defined
+
+- name: Delete the stack
+  hosts: localhost
+  roles:
+    - stack/delete

@@ -1,0 +1,6 @@
+- name: Delete stack
+  os_stack:
+    name: "{{ stack_name }}"
+    state: absent
+    verify: no
+    wait: yes

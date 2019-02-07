@@ -1,0 +1,436 @@
+- name: Set steps values
+  hosts: localhost
+  tasks:
+    - set_fact:
+        pre_mkcloud_steps:
+          - create_stack
+          - git_mkcloud
+          - copy_mkcloud_var_script
+    - set_fact:
+        mkcloud_pre_register_steps:
+          - prepareinstcrowbar
+          - bootstrapcrowbar
+          - instcrowbar
+    - set_fact:
+        mkcloud_register_steps:
+          - crowbar_register
+    - set_fact:
+        mkcloud_post_register_steps:
+          - post_allocate
+          - proposal
+
+    - name: Set all_playbook_steps
+      set_fact:
+        all_playbook_steps: >
+          {%- set steps = [] -%}
+          {%- set steps = steps + pre_mkcloud_steps -%}
+          {%- set steps = steps + mkcloud_pre_register_steps -%}
+          {%- set steps = steps + mkcloud_register_steps -%}
+          {%- set steps = steps + mkcloud_post_register_steps -%}
+          {{ steps }}
+
+    - name: Set playbook_steps to all_playbook_steps[playbook_steps_start:]
+      set_fact:
+        playbook_steps: >
+          {%- set start_at = [] -%}
+          {%- for s in all_playbook_steps -%}
+          {%-   if s == playbook_steps_start|default('') -%}
+          {%-     set _ = start_at.append(loop.index0) -%}
+          {%-   endif -%}
+          {%- endfor -%}
+          {%- if start_at|length > 0 -%}
+          {{ all_playbook_steps[start_at[0]:] }}
+          {%- else -%}
+          {{ start_at }}
+          {%- endif -%}
+      when: playbook_steps_start is defined
+
+    - name: Validate playbook_steps_start
+      fail:
+        msg: >-
+          The value '{{ playbook_steps_start }}' for playbook_steps_start is
+          invalid. Choose one of {{ all_playbook_steps | join(', ') }}.
+      when:
+        playbook_steps_start is defined and
+        playbook_steps|length < 1
+
+    - name: Set playbook_steps to all_playbook_steps
+      set_fact:
+        playbook_steps: "{{ all_playbook_steps }}"
+      when: playbook_steps is not defined
+
+    - debug:
+        msg: "Playbook steps to be executed: {{ playbook_steps | join(', ') }}"
+
+
+- name: Check for missing parameters
+  hosts: localhost
+  tasks:
+    # always required variables
+    - name: Check for parameter stack_name
+      fail:
+        msg: "stack_name is required"
+      when: stack_name is not defined
+
+    - name: Check for parameter ssh_keypair_filename
+      fail:
+        msg: "ssh_keypair_filename is required"
+      when: ssh_keypair_filename is not defined
+
+    # create_stack required variables
+    - name: Check for create_stack required variables
+      block:
+        - name: Check for parameter ssh_keypair_name
+          fail:
+            msg: "ssh_keypair_name is required"
+          when: ssh_keypair_name is not defined
+
+        - name: Check for parameter heat_template_filename
+          fail:
+            msg: "heat_template_filename is required"
+          when: heat_template_filename is not defined
+
+        - name: Check for env variable heat_node_number
+          fail:
+            msg: "heat_node_number is required"
+          when: lookup('env','heat_node_number') == ''
+
+        - name: Check for env variable heat_image
+          fail:
+            msg: "heat_image is required"
+          when: lookup('env','heat_image') == ''
+
+        - name: Check for env variable heat_admin_flavor
+          fail:
+            msg: "heat_admin_flavor is required"
+          when: lookup('env','heat_admin_flavor') == ''
+
+        - name: Check for env variable heat_node_flavor
+          fail:
+            msg: "heat_node_flavor is required"
+          when: lookup('env','heat_node_flavor') == ''
+      when: "'create_stack' in playbook_steps"
+
+    # copy_mkcloud_var_script required variables
+    - name: Check for copy_mkcloud_var_script required variables
+      block:
+        - name: Check for parameter mkcloud_vars_filename
+          fail:
+            msg: "mkcloud_vars_filename is required"
+          when: mkcloud_vars_filename is not defined
+      when: "'copy_mkcloud_var_script' in playbook_steps"
+
+
+- name: Create the stack and return its facts
+  hosts: localhost
+  tasks:
+    - import_role:
+        name: stack/create
+      when: "'create_stack' in playbook_steps"
+
+    - import_role:
+        name: stack/get_facts
+
+    - name: Create admin host group
+      add_host:
+        groups: stack_admin
+        name: admin
+        ansible_host: "{{ stack_floating_ip }}"
+        ansible_user: root
+        ansible_ssh_private_key_file: "{{ ssh_keypair_filename }}"
+
+
+- name: Get crowbar status
+  hosts: stack_admin
+  gather_facts: no
+  tasks:
+    - name: Wait for admin node
+      import_role:
+        name: node/wait
+
+    - name: Gather facts
+      setup:
+
+    - import_role:
+        name: crowbar/get_registered_nodes
+
+
+- name: Create node host group
+  hosts: localhost
+  tasks:
+    - import_role:
+        name: stack/get_node_facts
+
+    - name: Add hosts and node groups
+      add_host:
+        groups: stack_nodes
+        name: "{{ item.name }}"
+        ansible_host: "{{ item.addresses['mkcc-private-net'][0].addr }}"
+        ansible_user: "{{ lookup('env', 'heat_image_user') }}"
+        ansible_ssh_private_key_file: "{{ ssh_keypair_filename }}"
+        ansible_ssh_common_args: '-o ProxyCommand="ssh -W %h:%p -i {{ ssh_keypair_filename }} root@{{ stack_floating_ip }}"'
+        stack_facts: "{{ item }}"
+        crowbar_node_name: "{{ 'd' + item.addresses['mkcc-private-net'][0]['OS-EXT-IPS-MAC:mac_addr']|replace(':', '-') + '.virtual.cloud.suse.de' }}"
+      with_items: "{{ stack_node_facts }}"
+
+    - debug: var=hostvars[item].crowbar_node_name
+      with_items: "{{ groups['stack_nodes'] }}"
+
+    - name: Add host to stack_unregistered_nodes group
+      add_host:
+        groups: stack_unregistered_nodes
+        name: "{{ item }}"
+      with_items: "{{ groups['stack_nodes'] }}"
+      when:
+        hostvars[item].crowbar_node_name not in hostvars['admin'].crowbar_registered_nodes
+
+
+- name: Collate stack and crowbar facts
+  hosts: stack_nodes
+  gather_facts: no
+  tasks:
+    - name: Update details of registered nodes
+      import_role:
+        name: crowbar/update_registered_host
+      vars:
+        registered_nodes: "{{ hostvars['admin'].crowbar_registered_nodes }}"
+
+
+- name: Print all host groups
+  hosts: localhost
+  tasks:
+    - debug: var=groups
+
+
+- name: Wait for nodes to be accessible
+  hosts: stack_admin,stack_unregistered_nodes
+  any_errors_fatal: yes
+  gather_facts: no
+  tasks:
+    - name: Wait for nodes
+      import_role:
+        name: node/wait
+
+    - name: Gather facts
+      setup:
+
+    - name: Copy localhost hostvars
+      set_fact:
+        playbook_steps: "{{ hostvars['localhost']['playbook_steps'] }}"
+        mkcloud_pre_register_steps: "{{ hostvars['localhost']['mkcloud_pre_register_steps'] }}"
+        mkcloud_post_register_steps: "{{ hostvars['localhost']['mkcloud_post_register_steps'] }}"
+
+
+- name: Initialize admin node
+  hosts: stack_admin
+  any_errors_fatal: yes
+  tasks:
+    - import_role:
+        name: node/add_base_repository
+
+    - name: Install packages
+      zypper:
+        name: [
+          'nfs-client'
+        ]
+      environment:
+        ZYPP_LOCK_TIMEOUT: 120
+
+    - import_role:
+        name: node/install_default_kernel
+
+    - import_role:
+        name: node/upgrade_distribution
+
+    # copy keypair to enable password-less SSH from admin to nodes
+    - import_role:
+        name: admin/copy_ssh_keypair
+
+    # check out mkcloud and apply any patches
+    - import_role:
+        name: admin/git_mkcloud
+      when: "'git_mkcloud' in playbook_steps"
+
+    # copy mkcloud export vars script
+    - import_role:
+        name: admin/copy_mkcloud_var_script
+      when: "'copy_mkcloud_var_script' in playbook_steps"
+
+    - name: Disable firewall to allow access to crowbar UI
+      service:
+        name: SuSEfirewall2
+        state: stopped
+        enabled: no
+
+    - set_fact:
+        _tmp_steps: "{{ playbook_steps | intersect(mkcloud_pre_register_steps) }}"
+
+    - name: >
+        Run mkcloud_pre_register_steps (to monitor, on admin
+        run... tail -f `ls -tr /var/log/mkcloud/cloud/* | tail -1`)
+      shell: |
+        . ~/my_mkcloud_vars
+        cd ~/automation/scripts
+        ./mkcloud {{ _tmp_steps|join(' ') }}
+      register: _register_mkcloud
+#      failed_when: "'exitcode: ' in _register_mkcloud.stderr"
+      ignore_errors: yes
+      when: _tmp_steps|length > 0
+
+    - name: Find crowbar_register files
+      find:
+        paths: /srv/tftpboot
+        patterns: crowbar_register
+        recurse: yes
+      register: _register_crowbar_register
+
+    - name: Verify mkcloud_pre_register_steps
+      fail:
+        msg: |
+          "Unable to find any crowbar_register files.
+          './mkcloud {{ _tmp_steps|join(' ') }}' most likely failed above.
+          Check logs under admin:/var/log/mkcloud/."
+      when: _register_crowbar_register.matched == 0
+
+    - name: Disable GPG check on problematic admin repositories
+      shell: |
+        for r in Cloud; do
+          sed -i "s,^zypper -n ar \([^-].* \"$r\"\),zypper -n ar --no-gpgcheck \1,g" {{ item.path }}
+        done
+      with_items: "{{ _register_crowbar_register.files }}"
+      when: "'crowbar_register' in playbook_steps"
+
+
+- name: Register nodes with crowbar
+  hosts: stack_unregistered_nodes
+  become: yes
+  any_errors_fatal: yes
+  tasks:
+    - block:
+        - import_role:
+            name: node/add_base_repository
+
+        - name: Install packages
+          zypper:
+            name: [
+              'screen',
+              'wget'
+            ]
+          environment:
+            ZYPP_LOCK_TIMEOUT: 120
+
+        - import_role:
+            name: node/remove_base_repository
+
+        - name: Run crowbar_register
+          shell: |
+            set -e
+            f=/tmp/crowbar_register
+            v=`grep -i version_id /etc/os-release | sed "s,.*=\"*\([0-9\.]*\)\"*,\1,g"`
+            wget http://192.168.120.10:8091/suse-$v/`uname -p`/crowbar_register -O $f
+            chmod +x $f
+            while [ "`zypper lr | grep ^1`" != '' ]; do
+              zypper rr 1
+            done
+            screen -dm $f -f
+          async: 1
+          poll: 0
+
+        - name: Wait for node to register
+          delegate_to: admin
+          shell: knife node list | tr -d ' '
+          register: _register_tmp
+          until: crowbar_node_name in _register_tmp.stdout_lines
+          delay: 15
+          retries: 100
+
+        - name: Wait for node to be ready
+          delegate_to: admin
+          shell: "knife node show -a state {{ crowbar_node_name }} | awk '{ print $2 }'"
+          register: _register_tmp
+          until: _register_tmp.stdout == "ready"
+          delay: 15
+          retries: 200
+      when: "'crowbar_register' in playbook_steps"
+
+
+- name: Retrieve latest crowbar registered node facts
+  hosts: stack_admin
+  tasks:
+    - import_role:
+        name: crowbar/get_registered_nodes
+
+
+- name: Perform post-registration steps (nodes)
+  hosts: stack_nodes
+  gather_facts: no
+  become: yes
+  tasks:
+    - import_role:
+        name: crowbar/update_registered_host
+      vars:
+        registered_nodes: "{{ hostvars['admin'].crowbar_registered_nodes }}"
+
+    # sometimes host entry contains the pre-registration IP, maybe due to a
+    # registration process timing issue?
+    - name: Fix bad host entry
+      lineinfile:
+        path: /etc/hosts
+        regexp: "^{{ stack_facts.addresses['mkcc-private-net'][0].addr }} (.*)"
+        line: '{{ crowbar_facts.default.crowbar.network.admin.address }} \1'
+        backrefs: yes
+
+
+- name: Perform post-registration steps (all)
+  hosts: stack_admin,stack_nodes
+  become: yes
+  tasks:
+    - name: Refresh all repositories
+      zypper_repository:
+        repo: "*"
+        runrefresh: yes
+        auto_import_keys: yes
+
+    - import_role:
+        name: node/install_default_kernel
+
+    - import_role:
+        name: node/upgrade_distribution
+
+
+- name: Perform post-registration steps (admin)
+  hosts: stack_admin
+  any_errors_fatal: yes
+  tasks:
+    # python-sh is required by post_allocate and is missing from distro
+    - name: Install python-sh in case of HA cloud
+      shell: |
+        cd /tmp
+        wget https://files.pythonhosted.org/packages/7c/71/199d27d3e7e78bf448bcecae0105a1d5b29173ffd2bbadaa95a74c156770/sh-1.12.14.tar.gz
+        tar xzf sh-1.12.14.tar.gz
+        pushd sh-1.12.14
+        python setup.py install
+        popd
+        rm -rf sh-1.12.14*
+      when: lookup('env', 'hacloud')|default(0)|int != 0
+
+    - set_fact:
+        _tmp_steps: "{{ playbook_steps | intersect(mkcloud_post_register_steps) }}"
+
+    - name: >
+        Run mkcloud_post_register_steps (to monitor, on admin
+        run... tail -f `ls -tr /var/log/mkcloud/cloud/* | tail -1`)
+      shell: |
+        . ~/my_mkcloud_vars
+        cd ~/automation/scripts
+        ./mkcloud {{ _tmp_steps|join(' ') }}
+      register: _register_mkcloud
+#      failed_when: "'exitcode: ' in _register_mkcloud.stderr"
+#      ignore_errors: yes
+      when: _tmp_steps|length > 0
+
+
+- name: Display summary
+  hosts: localhost
+  tasks:
+    - debug: msg="Crowbar is now ready at http://{{ stack_floating_ip }}"

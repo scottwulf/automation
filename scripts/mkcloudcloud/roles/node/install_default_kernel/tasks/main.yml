@@ -1,0 +1,44 @@
+- name: Remove default-base kernel
+  zypper:
+    name: kernel-default-base
+    state: absent
+  environment:
+    ZYPP_LOCK_TIMEOUT: 120
+  register: register_kernel_default_base_uninstalled
+
+- name: Install default kernel
+  zypper:
+    name: kernel-default
+    state: present
+  environment:
+    ZYPP_LOCK_TIMEOUT: 120
+  register: register_kernel_default_installed
+
+# admin is the jumpbox so reboot nodes first
+- name: Reboot to new kernel (nodes)
+  import_role:
+    name: node/reboot
+  when:
+    (
+      register_kernel_default_base_uninstalled.changed or
+      register_kernel_default_installed.changed
+    ) and
+    inventory_hostname in groups.stack_nodes
+
+# reboot admin
+- name: Reboot to new kernel (admin)
+  import_role:
+    name: node/reboot
+  when:
+    (
+      register_kernel_default_base_uninstalled.changed or
+      register_kernel_default_installed.changed
+    ) and
+    inventory_hostname in groups.stack_admin
+
+- name: Wait for reboot
+  import_role:
+    name: node/reboot_wait
+  when:
+    register_kernel_default_base_uninstalled.changed or
+    register_kernel_default_installed.changed

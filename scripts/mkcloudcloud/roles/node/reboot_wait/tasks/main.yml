@@ -1,0 +1,5 @@
+# provide a delay to allow the server to reboot before attempting a connection
+- name: Wait for connection after reboot
+  wait_for_connection:
+    delay: 60
+    sleep: 10
