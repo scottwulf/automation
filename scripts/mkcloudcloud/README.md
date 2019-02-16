@@ -31,7 +31,7 @@ The following versions of softwares were used during development.
 
 | Name  | Version |
 | ------------- | ------------- |
-|develcloud  | 8, 9  |
+|develcloud  | 7, 8, 9  |
 | Python  | 2.7.13  |
 | pip  | 19.0.1  |
 | ansible  | 2.7.6 |

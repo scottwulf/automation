@@ -226,6 +226,9 @@
   any_errors_fatal: yes
   tasks:
     - import_role:
+        name: node/remove_invalid_repositories
+
+    - import_role:
         name: node/add_base_repository
 
     - name: Install packages
@@ -300,6 +303,12 @@
       with_items: "{{ _register_crowbar_register.files }}"
       when: "'crowbar_register' in playbook_steps"
 
+    - name: Replace missing DNS name with IP
+      shell: |
+        sed -i "s,^zypper \(.*\)//crowbar.virtual.cloud.suse.de:8091//*\(.*\),zypper \1//192.168.120.10:8091/\2,g" {{ item.path }}
+      with_items: "{{ _register_crowbar_register.files }}"
+      when: "'crowbar_register' in playbook_steps"
+
 
 - name: Register nodes with crowbar
   hosts: stack_unregistered_nodes
@@ -307,6 +316,9 @@
   any_errors_fatal: yes
   tasks:
     - block:
+        - import_role:
+            name: node/remove_invalid_repositories
+
         - import_role:
             name: node/add_base_repository
 
