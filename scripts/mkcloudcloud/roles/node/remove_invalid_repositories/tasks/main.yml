@@ -1,0 +1,7 @@
+- name: Remove invalid repositories
+  zypper_repository:
+    name: "{{ item }}"
+    state: absent
+  with_items:
+    - sles12sp2
+    - sles12sp2up
