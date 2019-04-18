@@ -76,3 +76,7 @@ $ for n in `knife node list`; do
 neutron, etc) \
 **Resolution**: Manually apply the failed proposal and rerun the playbook with
 "playbook_steps_start=proposal"
+\
+\
+**Issue**: Pacemaker proposal fails with "Cannot find device /dev/disk/by-id/scsi-!" \
+**Resolution**: Run the [gist](https://gist.github.com/scottwulf/fb076c5dc1db124729d25f904c23e0b7) on the admin node and rerun the playbook starting with the proposal step
